@@ -1,0 +1,165 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+
+enum WalletType {
+  BANK
+  CASH
+  MOMO
+  RECEIVABLE
+}
+
+enum FlowType {
+  INFLOW
+  OUTFLOW
+}
+
+enum TransactionCategory {
+  TRANSPORT
+  FOOD
+  UTILITIES
+  ENTERTAINMENT
+  HEALTH
+  EDUCATION
+  SHOPPING
+  WASTED
+  SALARY
+  FREELANCE
+  GIFT
+  RECHARGE
+  OTHER
+}
+
+model Wallet {
+  id          String     @id @default(cuid())
+  name        String     // e.g. "BK Account", "Physical Cash", "MTN MoMo", "John owes me"
+  type        WalletType
+  balance     Decimal    @default(0) @db.Decimal(15, 2)
+  currency    String     @default("RWF")
+  description String?
+  isActive    Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  expenses         Expense[]
+  cashFlows        CashFlow[]
+  transportRecharges TransportRecharge[]
+
+  @@map("wallets")
+}
+
+model Expense {
+  id          String              @id @default(cuid())
+  title       String
+  amount      Decimal             @db.Decimal(15, 2)
+  category    TransactionCategory @default(OTHER)
+  walletId    String
+  wallet      Wallet              @relation(fields: [walletId], references: [id])
+  note        String?
+  spentAt     DateTime            @default(now())
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  // Relation to cash flow (auto-created on expense)
+  cashFlow    CashFlow?
+
+  @@map("expenses")
+}
+
+
+model WastedMoney {
+  id          String   @id @default(cuid())
+  amount      Decimal  @db.Decimal(15, 2)
+  reason      String
+  keyTakeaway String
+  wastedAt    DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("wasted_money")
+}
+
+model TransportCard {
+  id        String   @id @default(cuid())
+  name      String   @default("Transport Card")
+  balance   Decimal  @default(0) @db.Decimal(15, 2)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  usages     TransportUsage[]
+  recharges  TransportRecharge[]
+
+  @@map("transport_cards")
+}
+
+model TransportUsage {
+  id        String        @id @default(cuid())
+  cardId    String
+  card      TransportCard @relation(fields: [cardId], references: [id])
+  amount    Decimal       @db.Decimal(15, 2)
+  route     String?
+  note      String?
+  usedAt    DateTime      @default(now())
+  createdAt DateTime      @default(now())
+
+  @@map("transport_usages")
+}
+
+model TransportRecharge {
+  id        String        @id @default(cuid())
+  cardId    String
+  card      TransportCard @relation(fields: [cardId], references: [id])
+  amount    Decimal       @db.Decimal(15, 2)
+  walletId  String
+  wallet    Wallet        @relation(fields: [walletId], references: [id])
+  note      String?
+  rechargedAt DateTime    @default(now())
+  createdAt   DateTime    @default(now())
+
+  cashFlow  CashFlow?
+
+  @@map("transport_recharges")
+}
+
+
+model Contract {
+  id           String    @id @default(cuid())
+  jobTitle     String
+  employer     String
+  salaryAmount Decimal   @db.Decimal(15, 2)
+  currency     String    @default("RWF")
+  startDate    DateTime
+  endDate      DateTime?
+  isActive     Boolean   @default(true)
+  note         String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@map("contracts")
+}
+
+
+model CashFlow {
+  id          String              @id @default(cuid())
+  type        FlowType
+  amount      Decimal             @db.Decimal(15, 2)
+  category    TransactionCategory @default(OTHER)
+  description String
+  walletId    String
+  wallet      Wallet              @relation(fields: [walletId], references: [id])
+
+  expenseId          String?            @unique
+  expense            Expense?           @relation(fields: [expenseId], references: [id])
+  transportRechargeId String?           @unique
+  transportRecharge  TransportRecharge? @relation(fields: [transportRechargeId], references: [id])
+
+  occurredAt  DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  @@map("cash_flows")
+}
