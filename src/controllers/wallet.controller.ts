@@ -24,7 +24,7 @@ export const getWallet = async (req: Request, res: Response, next: NextFunction)
             where: { id: req.params.id },
             include: {
                 expenses: { take: 10, orderBy: {spentAt:"desc"}},
-                cashFlows: { take: 10, orderBy: {occuredAt: "desc"}},
+                cashFlows: { take: 10, orderBy: {occurredAt: "desc"}},
             },
         });
         if (!wallet) return next(createError("Wallet not found", 404));
@@ -68,7 +68,7 @@ export const createWallet = async (req: Request, res: Response, next: NextFuncti
             data: { name, type, balance: balance || 0, currency: currency || "RWF", description },
         });
 
-        sendSuccess(res, WalletType, "Wallet created", 201);
+        sendSuccess(res, wallet, "Wallet created", 201);
     } catch (err) {
         next(err);
     }

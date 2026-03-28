@@ -3,6 +3,8 @@ import cors from "cors";
 import morgan from "morgan";
 import dotenv from "dotenv";
 
+import walletRoutes from './routes/wallet.routes';
+
 import { errorHandler } from "./middleware/errorHandler";
 import { notFound } from "./middleware/notFound";
 
@@ -19,6 +21,8 @@ app.use(morgan("dev"));
 app.get("/health", (_req, res) => {
     res.json({ status: "ok", timeStamp: new Date(). toISOString() });
 });
+
+app.use("/api/v1/wallets", walletRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
