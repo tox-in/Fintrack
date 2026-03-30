@@ -6,6 +6,7 @@ import dotenv from "dotenv";
 import walletRoutes from './routes/wallet.routes';
 import expenseRoutes from './routes/expense.routes';
 import wastedMoneyRoutes from './routes/wastedMoney.routes';
+import transportRoutes from './routes/transport.routes';
 
 import { errorHandler } from "./middleware/errorHandler";
 import { notFound } from "./middleware/notFound";
@@ -27,6 +28,7 @@ app.get("/health", (_req, res) => {
 app.use("/api/v1/wallets", walletRoutes);
 app.use("/api/v1/expenses", expenseRoutes);
 app.use("/api/v1/wasted-money", wastedMoneyRoutes);
+app.use("/api/v1/transport", transportRoutes);
 app.use(notFound);
 app.use(errorHandler);
 
