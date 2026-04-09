@@ -35,6 +35,18 @@ enum TransactionCategory {
   OTHER
 }
 
+enum ReceivableDirection {
+  I_OWE_THEM
+  THEY_OWE_ME
+}
+
+enum ReceivableStatus {
+  PENDING
+  PARTIAL
+  SETTLED
+  WRITTEN_OFF
+}
+
 model Wallet {
   id          String     @id @default(cuid())
   name        String     // e.g. "BK Account", "Physical Cash", "MTN MoMo", "John owes me"
@@ -49,9 +61,50 @@ model Wallet {
   expenses         Expense[]
   cashFlows        CashFlow[]
   transportRecharges TransportRecharge[]
+  receivablePayments ReceivablePayment[]
+  wastedMoney      WastedMoney[]
 
   @@map("wallets")
 }
+
+
+model Receivable {
+  id String @id @default(cuid())
+  personName String
+  phoneNumber String?
+  direction ReceivableDirection
+  originalAmount Decimal @db.Decimal(15, 2)
+  paidAmount Decimal @default(0) @db.Decimal(15, 2)
+  remainingAmount Decimal @db.Decimal(15, 2)
+  currency String @default("RWF")
+  status ReceivableStatus @default(PENDING)
+  reason String
+  dueDate DateTime?
+  note String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  payments ReceivablePayment[]
+
+  @@map("receivables")
+}
+
+model ReceivablePayment {
+  id String @id @default(cuid())
+  receivableId String
+  receivable Receivable @relation(fields: [receivableId], references: [id])
+  walletId String?
+  wallet Wallet? @relation(fields: [walletId], references: [id])
+  amount Decimal @db.Decimal(15, 2)
+  note String?
+  paidAt DateTime @default(now())
+  createdAt DateTime @default(now())
+
+  cashFlow CashFlow?
+
+  @@map("receivable_payments")
+}
+
 
 model Expense {
   id          String              @id @default(cuid())
@@ -77,9 +130,13 @@ model WastedMoney {
   amount      Decimal  @db.Decimal(15, 2)
   reason      String
   keyTakeaway String
+  walletId    String
+  wallet      Wallet   @relation(fields: [walletId], references: [id])
   wastedAt    DateTime @default(now())
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  cashFlow    CashFlow?
 
   @@map("wasted_money")
 }
@@ -157,6 +214,10 @@ model CashFlow {
   expense            Expense?           @relation(fields: [expenseId], references: [id])
   transportRechargeId String?           @unique
   transportRecharge  TransportRecharge? @relation(fields: [transportRechargeId], references: [id])
+  receivablePaymentId String?          @unique
+  receivablePayment  ReceivablePayment? @relation(fields: [receivablePaymentId], references: [id])
+  wastedMoneyId       String?          @unique
+  wastedMoney WastedMoney? @relation(fields: [wastedMoneyId], references: [id])
 
   occurredAt  DateTime @default(now())
   createdAt   DateTime @default(now())
