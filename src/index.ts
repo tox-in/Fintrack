@@ -8,7 +8,8 @@ import expenseRoutes from './routes/expense.routes';
 import wastedMoneyRoutes from './routes/wastedMoney.routes';
 import transportRoutes from './routes/transport.routes';
 import contractRoutes from "./routes/contract.routes";
-
+import cashFlowRoutes from "./routes/cashFlow.routes";
+import receivableRoutes from "./routes/receivable.routes";
 import { errorHandler } from "./middleware/errorHandler";
 import { notFound } from "./middleware/notFound";
 
@@ -31,6 +32,8 @@ app.use("/api/v1/expenses", expenseRoutes);
 app.use("/api/v1/wasted-money", wastedMoneyRoutes);
 app.use("/api/v1/transport", transportRoutes);
 app.use("/api/v1/contracts", contractRoutes);
+app.use("/api/v1/cash-flows", cashFlowRoutes);
+app.use("/api/v1/receivables", receivableRoutes);
 app.use(notFound);
 app.use(errorHandler);
 
