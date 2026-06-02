@@ -13,6 +13,7 @@ import cashFlowRoutes from "./routes/cashFlow.routes";
 import receivableRoutes from "./routes/receivable.routes";
 import { errorHandler } from "./middleware/errorHandler";
 import { notFound } from "./middleware/notFound";
+import helmet from "helmet";
 
 dotenv.config();
 
@@ -20,6 +21,7 @@ const app = express();
 const PORT = process.env.PORT;
 
 app.use(cors());
+app.use(helmet());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan("dev"));

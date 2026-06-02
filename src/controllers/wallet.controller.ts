@@ -1,6 +1,6 @@
 import { NextFunction, Request, Response } from "express";
 import prisma from "../utils/prisma";
-import { sendSuccess } from "../utils/response";
+import { sendPaginated, sendSuccess } from "../utils/response";
 import { createError } from "../middleware/errorHandler";
 import { WalletType } from "@prisma/client";
 
@@ -10,11 +10,33 @@ export const getAllWallets = async (
   next: NextFunction,
 ) => {
   try {
-    const wallets = await prisma.wallet.findMany({
-      where: { isActive: true },
-      orderBy: { createdAt: "asc" },
-    });
-    sendSuccess(res, wallets);
+
+    const userId = _req.user?.id;
+
+    if (!userId) {
+        return next(createError("Unauthorized", 401));
+    }
+
+    const { page = 1, limit = 10, isActive } = _req.query;
+    const whereClause: any = { userId };
+
+    if (isActive !== undefined) {
+      whereClause.isActive = isActive === "true";
+    }
+
+    const skip = (Number(page) - 1) * Number(limit);
+
+    const [wallets, total] = await Promise.all([
+      prisma.wallet.findMany({
+        where: whereClause,
+        skip,
+        take: Number(limit),
+        orderBy: { createdAt: "asc" },
+      }),
+      prisma.wallet.count({ where: whereClause })
+    ]);
+
+    sendPaginated(res, wallets, total, Number(page), Number(limit));
   } catch (err) {
     next(err);
   }
