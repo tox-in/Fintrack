@@ -4,6 +4,7 @@ import morgan from "morgan";
 import dotenv from "dotenv";
 
 import walletRoutes from './routes/wallet.routes';
+import authRoutes from './routes/auth.routes';
 import expenseRoutes from './routes/expense.routes';
 import wastedMoneyRoutes from './routes/wastedMoney.routes';
 import transportRoutes from './routes/transport.routes';
@@ -27,6 +28,7 @@ app.get("/health", (_req, res) => {
     res.json({ status: "ok", timeStamp: new Date(). toISOString() });
 });
 
+app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/wallets", walletRoutes);
 app.use("/api/v1/expenses", expenseRoutes);
 app.use("/api/v1/wasted-money", wastedMoneyRoutes);

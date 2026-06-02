@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: fintrack-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: fintrack
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - fintrack-network
+
+  # Add your app service here if needed
+  # app:
+  #   build: .
+  #   depends_on:
+  #     - postgres
+  #   environment:
+  #     DATABASE_URL: postgresql://postgres:password@postgres:5432/fintrack
+  #   ports:
+  #     - "3000:3000"
+  #   networks:
+  #     - fintrack-network
+
+volumes:
+  postgres_data:
+
+networks:
+  fintrack-network:

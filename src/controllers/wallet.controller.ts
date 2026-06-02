@@ -15,7 +15,9 @@ export const getAllWallets = async (
       orderBy: { createdAt: "asc" },
     });
     sendSuccess(res, wallets);
-  } catch (err) {}
+  } catch (err) {
+    next(err);
+  }
 };
 
 export const getWallet = async (req: Request, res: Response, next: NextFunction) => {
