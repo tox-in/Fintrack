@@ -59,70 +59,75 @@ export const getWallet = catchAsync(
   },
 );
 
-export const getWalletSummary = async (
-  _req: Request,
-  res: Response,
-  next: NextFunction,
-) => {
-  try {
-    const wallets = await prisma.wallet.findMany({ where: { isActive: true } });
-
-    const summary = {
-      total: wallets.reduce((sum, w) => sum + Number(w.balance), 0),
-      byType: {} as Record<WalletType, number>,
-    };
-
-    for (const type of Object.values(WalletType)) {
-      summary.byType[type] = wallets
-        .filter((w) => w.type === type)
-        .reduce((sum, w) => sum + Number(w.balance), 0);
-    }
-
-    sendSuccess(res, { wallets, summary });
-  } catch (err) {
-    next(err);
-  }
-};
-
-export const createWallet = catchAsync(async (
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) => {
-    const userId = req.user?.id;
+export const getWalletSummary = catchAsync(
+  async (_req: Request, res: Response, next: NextFunction) => {
+    try {
+      const userId = _req.user?.id;
 
       if (!userId) {
         return next(createError("Unauthorized", 401));
       }
 
-  try {
-    const { name, type, balance, currency, description } = req.body;
+      const wallets = await prisma.wallet.findMany({
+        where: { isActive: true, userId: userId },
+      });
 
-    if (!name || !type) return next(createError("name and type are required"));
-    if (!Object.values(WalletType).includes(type)) {
-      return next(
-        createError(
-          `type must be one of: ${Object.values(WalletType).join(",")}`,
-        ),
-      );
+      const summary = {
+        total: wallets.reduce((sum, w) => sum + Number(w.balance), 0),
+        byType: {} as Record<WalletType, number>,
+      };
+
+      for (const type of Object.values(WalletType)) {
+        summary.byType[type] = wallets
+          .filter((w) => w.type === type)
+          .reduce((sum, w) => sum + Number(w.balance), 0);
+      }
+
+      sendSuccess(res, { wallets, summary });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+export const createWallet = catchAsync(
+  async (req: Request, res: Response, next: NextFunction) => {
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return next(createError("Unauthorized", 401));
     }
 
-    const wallet = await prisma.wallet.create({
-      data: {
-        name,
-        type,
-        balance: balance || 0,
-        currency: currency || "RWF",
-        description,
-        user: { connect: { id: userId } },
-      },
-    });
+    try {
+      const { name, type, balance, currency, description } = req.body;
 
-    sendSuccess(res, wallet, "Wallet created", 201);
-  } catch (err) {
-    next(err);
-  }
-});
+      if (!name || !type)
+        return next(createError("name and type are required"));
+      if (!Object.values(WalletType).includes(type)) {
+        return next(
+          createError(
+            `type must be one of: ${Object.values(WalletType).join(",")}`,
+          ),
+        );
+      }
+
+      const wallet = await prisma.wallet.create({
+        data: {
+          name,
+          type,
+          balance: balance || 0,
+          currency: currency || "RWF",
+          description,
+          user: { connect: { id: userId } },
+        },
+      });
+
+      sendSuccess(res, wallet, "Wallet created", 201);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
 
 export const updateWallet = async (
   req: Request,
@@ -130,14 +135,42 @@ export const updateWallet = async (
   next: NextFunction,
 ) => {
   try {
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return next(createError("Unauthorized", 401));
+    }
+
     const { name, description, isActive, currency } = req.body;
 
     const wallet = await prisma.wallet.update({
-      where: { id: req.params.id },
+      where: { id: req.params.id, userId: userId },
       data: { name, description, isActive, currency },
     });
 
     sendSuccess(res, wallet, "Wallet updated");
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const deactivateWallet = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return next(createError("Unauthorized", 401));
+    }
+
+    await prisma.wallet.update({
+      where: { id: req.params.id, userId: userId },
+      data: { isActive: false },
+    });
+    sendSuccess(res, null, "Wallet deactivated");
   } catch (err) {
     next(err);
   }
@@ -149,11 +182,16 @@ export const deleteWallet = async (
   next: NextFunction,
 ) => {
   try {
-    await prisma.wallet.update({
-      where: { id: req.params.id },
-      data: { isActive: false },
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return next(createError("Unauthorized", 401));
+    }
+
+    await prisma.wallet.delete({
+      where: { id: req.params.id, userId: userId },
     });
-    sendSuccess(res, null, "Wallet deactivated");
+    sendSuccess(res, null, "Wallet deleted");
   } catch (err) {
     next(err);
   }
