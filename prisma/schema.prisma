@@ -91,7 +91,6 @@ model Wallet {
   @@map("wallets")
 }
 
-
 model Receivable {
   id                  String    @id @default(cuid())
   personName          String
@@ -132,7 +131,6 @@ model ReceivablePayment {
   @@map("receivable_payments")
 }
 
-
 model Expense {
   id                  String              @id @default(cuid())
   title               String
@@ -152,7 +150,6 @@ model Expense {
 
   @@map("expenses")
 }
-
 
 model WastedMoney {
   id                  String    @id @default(cuid())
@@ -218,7 +215,6 @@ model TransportRecharge {
 
   @@map("transport_recharges")
 }
-
 
 model Contract {
   id           String    @id @default(cuid())

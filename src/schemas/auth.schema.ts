@@ -7,6 +7,28 @@ enum WalletType {
   RECEIVABLE
 }
 
+enum FlowType {
+  INFLOW,
+  OUTFLOW
+}
+
+enum TransactionCategory {
+  TRANSPORT,
+  FOOD,
+  UTILITIES,
+  ENTERTAINMENT,
+  HEALTH,
+  EDUCATION,
+  SHOPPING,
+  WASTED,
+  SALARY,
+  FREELANCE,
+  GIFT,
+  RECHARGE,
+  REBATE,
+  OTHER
+}
+
 export const RegisterSchema = z.object({
     email: z.string ().trim().toLowerCase().email("Invalid email format"),
     password: z.string().min(6, "Password must be at least 6 characters long").max(100),
@@ -35,4 +57,17 @@ export const CreateWalletSchema = z.object({
     currency: z.string().trim().max(3, "Currency must be a 3-character code"),
     description: z.string().trim().max(200).optional(),
     isActive: z.boolean().default(true)
+}).strict();
+
+export const CreateCashflowSchema = z.object({
+    type: z.string().trim().refine((val) => Object.values(FlowType).includes(val), {
+        message: `Type must be one of: ${Object.values(FlowType).join(", ")}`,
+    }),
+    amount: z.string().regex(/^\d+(\.\d+)?$/, "Invalid amount format"),
+    category: z.string().trim().refine((val) => Object.values(TransactionCategory).includes(val), {
+        message: `Category must be one of: ${Object.values(TransactionCategory).join(", ")}`,
+    }).max(100).optional(),
+    description: z.string().trim().max(200),
+    walletId: z.string().cuid(),
+    occurredAt: z.string().datetime().optional()
 }).strict();

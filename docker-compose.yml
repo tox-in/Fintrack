@@ -11,7 +11,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - fintrack-data:/var/lib/postgresql/data
     networks:
       - fintrack-network
 
@@ -28,7 +28,7 @@ services:
   #     - fintrack-network
 
 volumes:
-  postgres_data:
+  fintrack-data:
 
 networks:
   fintrack-network:
