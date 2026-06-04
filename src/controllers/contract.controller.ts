@@ -1,32 +1,31 @@
 import { Request, Response, NextFunction } from "express";
 import prisma from "../utils/prisma";
 import { sendSuccess } from "../utils/response";
-import { createError } from "../middleware/errorHandler";
+import { catchAsync, createError } from "../middleware/errorHandler";
 
-export const getAllContracts = async (
-  _req: Request,
-  res: Response,
-  next: NextFunction,
-) => {
-  try {
+export const getAllContracts = catchAsync(
+  async (_req: Request, res: Response, next: NextFunction) => {
+    const userId = _req.user?.id;
+
+    if (!userId) return next(createError("Unauthorized", 401));
+
     const contracts = await prisma.contract.findMany({
+      where: { userId: userId },
       orderBy: { startDate: "desc" },
     });
 
     sendSuccess(res, contracts);
-  } catch (error) {
-    next(error);
-  }
-};
+  },
+);
 
-export const getActiveContract = async (
-  _req: Request,
-  res: Response,
-  next: NextFunction,
-) => {
-  try {
+export const getActiveContract = catchAsync(
+  async (_req: Request, res: Response, next: NextFunction) => {
+    const userId = _req.user?.id;
+
+    if (!userId) return next(createError("Unauthorized", 401));
+
     const contract = await prisma.contract.findFirst({
-      where: { isActive: true },
+      where: { isActive: true, userId: userId },
       orderBy: { startDate: "desc" },
     });
     if (!contract) return next(createError("No active contract found", 404));
@@ -43,33 +42,28 @@ export const getActiveContract = async (
       : null;
 
     sendSuccess(res, { ...contract, daysElapsed, daysRemaining });
-  } catch (error) {
-    next(error);
-  }
-};
+  },
+);
 
-export const getContract = async (
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) => {
-  try {
-    const contract = await prisma.contract.findUnique({
-      where: { id: req.params.id },
+export const getContract = catchAsync(
+  async (req: Request, res: Response, next: NextFunction) => {
+    const userId = req.user?.id;
+
+    if (!userId) return next(createError("Unauthorized", 401));
+    const contract = await prisma.contract.findFirst({
+      where: { id: req.params.id, userId: userId },
     });
     if (!contract) return next(createError("Contract not found", 404));
     sendSuccess(res, contract);
-  } catch (error) {
-    next(error);
-  }
-};
+  },
+);
 
-export const createContract = async (
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) => {
-  try {
+export const createContract = catchAsync(
+  async (req: Request, res: Response, next: NextFunction) => {
+    const userId = req.user?.id;
+
+    if (!userId) return next(createError("Unauthorized", 401));
+
     const {
       jobTitle,
       employer,
@@ -90,8 +84,9 @@ export const createContract = async (
     if (Number(salaryAmount) <= 0)
       return next(createError("salaryAmount must be positive"));
 
+    //Deactivate any existing active contracts
     await prisma.contract.updateMany({
-      where: { isActive: true },
+      where: { isActive: true, userId: userId },
       data: { isActive: false },
     });
 
@@ -105,6 +100,7 @@ export const createContract = async (
         endDate: endDate ? new Date(endDate) : null,
         note,
         isActive: true,
+        userId: userId,
       },
     });
 
@@ -114,17 +110,22 @@ export const createContract = async (
       "Contract created and set as active successfully",
       201,
     );
-  } catch (error) {
-    next(error);
-  }
-};
+  },
+);
 
-export const updateContract = async (
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) => {
-  try {
+export const updateContract = catchAsync(
+  async (req: Request, res: Response, next: NextFunction) => {
+    const userId = req.user?.id;
+    const { id } = req.params;
+
+    if (!userId) return next(createError("Unauthorized", 401));
+
+    const existingContract = await prisma.contract.findFirst({
+      where: { id, userId },
+    });
+
+    if (!existingContract) return next(createError("Contract not found", 404));
+
     const {
       jobTitle,
       employer,
@@ -136,38 +137,80 @@ export const updateContract = async (
       note,
     } = req.body;
 
-    if(isActive === true) {
+    if (isActive === true) {
       await prisma.contract.updateMany({
-        where: { isActive: true, NOT: { id: req.params.id } },
+        where: { isActive: true, userId: userId, NOT: { id: req.params.id } },
         data: { isActive: false },
       });
     }
 
+    const updateData: any = {};
+    if (jobTitle !== undefined) updateData.jobTitle = jobTitle;
+    if (employer !== undefined) updateData.employer = employer;
+    if (salaryAmount !== undefined)
+      updateData.salaryAmount = Number(salaryAmount);
+    if (currency !== undefined) updateData.currency = currency;
+    if (startDate !== undefined) updateData.startDate = new Date(startDate);
+    if (endDate !== undefined)
+      updateData.endDate = endDate ? new Date(endDate) : null;
+    if (isActive !== undefined) updateData.isActive = isActive;
+    if (note !== undefined) updateData.note = note;
+
     const contract = await prisma.contract.update({
       where: { id: req.params.id },
-      data: {
-        jobTitle,
-        employer,
-        salaryAmount: salaryAmount || Number(salaryAmount),
-        currency,
-        startDate: startDate ? new Date(startDate) : undefined,
-        endDate: endDate ? new Date(endDate) : undefined,
-        isActive,
-        note,
-      },
+      data: updateData,
     });
     sendSuccess(res, contract, "Contract updated successfully");
-  } catch (error) {
-    next(error);
-  }
-};
+  },
+);
 
+export const deleteContract = catchAsync(
+  async (req: Request, res: Response, next: NextFunction) => {
+    const userId = req.user?.id;
+    const { id } = req.params;
 
-export const deleteContract = async (req: Request, res: Response, next:NextFunction) => {
-  try {
-    await prisma.contract.delete({ where: { id: req.params.id } });
+    if (!userId) return next(createError("Unauthorized", 401));
+
+    const existingContract = await prisma.contract.findFirst({
+      where: { id: id, userId: userId },
+    });
+
+    if (!existingContract) {
+      return next(createError("Contract not found", 404));
+    }
+
+    await prisma.contract.delete({ 
+      where: { id: id } 
+    });
     sendSuccess(res, null, "Contract deleted successfully");
-  } catch (error) {
-    next(error);
-  }
-}
+  },
+);
+
+
+export const getContractStats = catchAsync(
+  async (req: Request, res: Response, next: NextFunction) => {
+    const userId = req.user?.id;
+
+    if (!userId) return next(createError("Unauthorized", 401));
+
+    const stats = await prisma.contract.aggregate({
+      where: { userId },
+      _count: { id: true },
+      _avg: { salaryAmount: true },
+      _max: { salaryAmount: true },
+      _min: { salaryAmount: true },
+    });
+
+    const activeContract = await prisma.contract.findFirst({
+      where: { userId, isActive: true },
+    });
+
+    sendSuccess(res, {
+      totalContracts: stats._count.id,
+      averageSalary: stats._avg.salaryAmount,
+      maxSalary: stats._max.salaryAmount,
+      minSalary: stats._min.salaryAmount,
+      activeContract: activeContract || null,
+    });
+  },
+);

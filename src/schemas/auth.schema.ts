@@ -71,3 +71,24 @@ export const CreateCashflowSchema = z.object({
     walletId: z.string().cuid(),
     occurredAt: z.string().datetime().optional()
 }).strict();
+
+
+export const CreateContractSchema = z.object({
+    jobTitle: z.string().trim().max(200),
+    employer: z.string().trim().max(200),
+    salaryAmount: z.string().regex(/^\d+(\.\d+)?$/, "Invalid salary amount format"),
+    currency: z.string().trim().max(3, "Currency must be a 3-character code").default("RWF"),
+    startDate: z.string().datetime(),
+    endDate: z.string().datetime().optional(),
+    note: z.string().trim().max(500).optional()
+}).strict();
+export const UpdateContractSchema = z.object({
+    jobTitle: z.string().trim().max(200),
+    employer: z.string().trim().max(200),
+    salaryAmount: z.string().regex(/^\d+(\.\d+)?$/, "Invalid salary amount format"),
+    currency: z.string().trim().max(3, "Currency must be a 3-character code").default("RWF"),
+    startDate: z.string().datetime(),
+    endDate: z.string().datetime().optional(),
+    isActive: z.boolean().optional(),
+    note: z.string().trim().max(500).optional()
+}).strict();
