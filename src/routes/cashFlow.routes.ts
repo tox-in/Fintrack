@@ -7,10 +7,10 @@ import { CreateCashflowSchema } from "../schemas/auth.schema";
 const router = Router();
 router.use(authenticate);
 
-router.get("/summary", getCashFlowSummary);
-router.get("/", getAllCashFlows);
-router.get("/:id", getCashFlow);
-router.post("/", validate(CreateCashflowSchema), createCashFlow);
-router.delete("/:id", reverseCashFlow);
+router.get("/summary",authenticate, getCashFlowSummary);
+router.get("/", authenticate, getAllCashFlows);
+router.get("/:id", authenticate, getCashFlow);
+router.post("/", authenticate, validate(CreateCashflowSchema), createCashFlow);
+router.delete("/:id", authenticate, reverseCashFlow);
 
 export default router;

@@ -1,7 +1,9 @@
 import { Router } from "express";
 import { createCard, getAllCards, getAllRecharges, getAllUsages, getCard, getTransportStats, recordRecharge, recordUsage } from "../controllers/transport.controller";
+import { authenticate } from "../middleware/auth.middleware";
 
 const router = Router();
+router.use(authenticate);
 
 router.get("/stats", getTransportStats);
 router.get("/cards", getAllCards);

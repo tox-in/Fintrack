@@ -9,8 +9,10 @@ import {
   recordPayment,
   getPayments,
 } from "../controllers/receivable.controller";
+import { authenticate } from "../middleware/auth.middleware";
 
 const router = Router();
+router.use(authenticate);
 
 router.get("/summary", getReceivableSummary);
 router.get("/", getAllReceivables);

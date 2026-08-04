@@ -154,7 +154,7 @@ export const createCashFlow = catchAsync(async (
     if (Number(amount) <= 0)
       return next(createError("amount must be positive"));
 
-    const wallet = await prisma.wallet.findUnique({ where: { id: walletId, userId: userId } });
+    const wallet = await prisma.wallet.findFirst({ where: { id: walletId, userId: userId } });
     if (!wallet) return next(createError("Wallet not found", 404));
 
     // For manual outflows, check balance

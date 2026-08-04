@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import prisma from "../utils/prisma";
 import { sendPaginated, sendSuccess } from "../utils/response";
-import { createError } from "./../middleware/errorHandler";
+import { catchAsync, createError } from "../middleware/errorHandler";
 import { TransactionCategory } from "@prisma/client";
 
 export const getAllExpenses = async (
@@ -9,12 +9,16 @@ export const getAllExpenses = async (
   res: Response,
   next: NextFunction,
 ) => {
+  const userId = req.user?.id;
+
+  if (!userId) return next(createError("Unauthorized", 401));
+
   try {
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 20;
     const skip = (page - 1) * limit;
 
-    const where: Record<string, unknown> = {};
+    const where: Record<string, unknown> = { userId: userId };
     if (req.query.walletId) where.walletId = req.query.walletId;
     if (req.query.category) where.category = req.query.category;
     if (req.query.from || req.query.to) {
@@ -46,6 +50,10 @@ export const getDailySummary = async (
   res: Response,
   next: NextFunction,
 ) => {
+  const userId = req.user?.id;
+
+  if (!userId) return next(createError("Unauthorized", 401));
+
   try {
     const date = req.query.date
       ? new Date(req.query.date as string)
@@ -54,7 +62,7 @@ export const getDailySummary = async (
     const endOfDay = new Date(date.setHours(23, 59, 59, 999));
 
     const expenses = await prisma.expense.findMany({
-      where: { spentAt: { gte: startOfDay, lte: endOfDay } },
+      where: { spentAt: { gte: startOfDay, lte: endOfDay }, userId: userId },
       include: { wallet: { select: { name: true, type: true } } },
       orderBy: { spentAt: "asc" },
     });
@@ -79,9 +87,13 @@ export const getExpense = async (
   res: Response,
   next: NextFunction,
 ) => {
+  const userId = req.user?.id;
+
+  if (!userId) return next(createError("Unauthorized", 401));
+
   try {
-    const expense = await prisma.expense.findUnique({
-      where: { id: req.params.id },
+    const expense = await prisma.expense.findFirst({
+      where: { id: req.params.id, userId: userId },
       include: { wallet: true, cashFlow: true },
     });
 
@@ -97,6 +109,10 @@ export const createExpense = async (
   res: Response,
   next: NextFunction,
 ) => {
+  const userId = req.user?.id;
+
+  if (!userId) return next(createError("Unauthorized", 401));
+
   try {
     const { title, amount, category, walletId, note, spentAt } = req.body;
 
@@ -106,7 +122,9 @@ export const createExpense = async (
     if (Number(amount) <= 0)
       return next(createError("amount must be positive"));
 
-    const wallet = await prisma.wallet.findUnique({ where: { id: walletId } });
+    const wallet = await prisma.wallet.findFirst({
+      where: { id: walletId, userId: userId },
+    });
     if (!wallet) return next(createError("Wallet not found", 404));
     if (Number(wallet.balance) < Number(amount)) {
       return next(
@@ -124,13 +142,14 @@ export const createExpense = async (
           category: category || TransactionCategory.OTHER,
           walletId,
           note,
+          userId: userId,
           spentAt: spentAt ? new Date(spentAt) : new Date(),
         },
         include: { wallet: true },
       });
 
       await tx.wallet.update({
-        where: { id: walletId },
+        where: { id: walletId, userId: userId },
         data: { balance: { decrement: amount } },
       });
 
@@ -141,6 +160,7 @@ export const createExpense = async (
           category: category || TransactionCategory.OTHER,
           description: `Expense: ${title}`,
           walletId,
+          userId: userId,
           occurredAt: spentAt ? new Date(spentAt) : new Date(),
         },
       });
@@ -159,25 +179,30 @@ export const reverseExpense = async (
   res: Response,
   next: NextFunction,
 ) => {
+  const userId = req.user?.id;
+
+  if (!userId) return next(createError("Unauthorized", 401));
   try {
+
+    const paramId = req.params.id;
     await prisma.$transaction(async (tx) => {
       const expense = await tx.expense.findUnique({
-        where: { id: req.params.id },
+        where: { id: paramId },
         include: { wallet: true, cashFlow: true },
       });
 
       if (!expense) return next(createError("Expense not found", 404));
 
       await tx.wallet.update({
-        where: { id: expense.walletId },
+        where: { id: expense.walletId, userId },
         data: { balance: { increment: Number(expense.amount) } },
       });
 
       if (expense.cashFlow) {
-        await tx.cashFlow.delete({ where: { id: expense.cashFlow.id } });
+        await tx.cashFlow.delete({ where: { id: expense.cashFlow.id, userId: userId } });
       }
 
-      await tx.expense.delete({ where: { id: req.params.id } });
+      await tx.expense.delete({ where: { id: paramId } });
     });
 
     sendSuccess(res, null, "Expense reversed and wallet balance restored");
@@ -186,7 +211,19 @@ export const reverseExpense = async (
   }
 };
 
-export const deleteExpense = async (req: Request, res: Response, next: NextFunction) => {
-    await prisma.expense.delete({ where: { id: req.params.id } });
-    sendSuccess(res, null, "Expense deleted");
-}
+export const deleteExpense = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+   const userId = req.user?.id;
+  if (!userId) return next(createError("Unauthorized", 401));
+
+  try {
+    await prisma.expense.delete({ where: { id: req.params.id, userId: userId } });
+  sendSuccess(res, null, "Expense deleted");
+  } catch (error) {
+    next(error);
+  }
+
+};

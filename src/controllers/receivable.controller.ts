@@ -12,12 +12,16 @@ const computeStatus = (paid: number, original: number): ReceivableStatus => {
 
 
 export const getAllReceivables = async (req: Request, res: Response, next: NextFunction) => {
+  const userId = req.user?.id;
+  if (!userId) return next(createError("Unauthorized", 401));
+
   try {
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 20;
     const skip = (page - 1) * limit;
 
     const where: Record<string, unknown> = {};
+    where.userId = userId;
     if (req.query.direction) where.direction = req.query.direction;
     if (req.query.status) where.status = req.query.status;
     if (req.query.personName) {
@@ -42,30 +46,33 @@ export const getAllReceivables = async (req: Request, res: Response, next: NextF
 };
 
 
-export const getReceivableSummary = async (_req: Request, res: Response, next: NextFunction) => {
+export const getReceivableSummary = async (req: Request, res: Response, next: NextFunction) => {
+  const userId = req.user?.id;
+  if (!userId) return next(createError("Unauthorized", 401));
+
   try {
     const [owedToMe, iOwe, overdue] = await Promise.all([
-      // Total others owe me (pending + partial)
       prisma.receivable.aggregate({
         where: {
+          userId,
           direction: ReceivableDirection.THEY_OWE_ME,
           status: { in: [ReceivableStatus.PENDING, ReceivableStatus.PARTIAL] },
         },
         _sum: { remainingAmount: true },
         _count: true,
       }),
-      // Total I owe others
       prisma.receivable.aggregate({
         where: {
+          userId,
           direction: ReceivableDirection.I_OWE_THEM,
           status: { in: [ReceivableStatus.PENDING, ReceivableStatus.PARTIAL] },
         },
         _sum: { remainingAmount: true },
         _count: true,
       }),
-      // Overdue (past dueDate, not settled)
       prisma.receivable.count({
         where: {
+          userId,
           dueDate: { lt: new Date() },
           status: { in: [ReceivableStatus.PENDING, ReceivableStatus.PARTIAL] },
         },
@@ -88,9 +95,12 @@ export const getReceivableSummary = async (_req: Request, res: Response, next: N
 
 
 export const getReceivable = async (req: Request, res: Response, next: NextFunction) => {
+  const userId = req.user?.id;
+  if (!userId) return next(createError("Unauthorized", 401));
+
   try {
-    const receivable = await prisma.receivable.findUnique({
-      where: { id: req.params.id },
+    const receivable = await prisma.receivable.findFirst({
+      where: { id: req.params.id, userId },
       include: {
         payments: {
           include: { wallet: { select: { name: true, type: true } } },
@@ -107,6 +117,9 @@ export const getReceivable = async (req: Request, res: Response, next: NextFunct
 
 
 export const createReceivable = async (req: Request, res: Response, next: NextFunction) => {
+  const userId = req.user?.id;
+  if (!userId) return next(createError("Unauthorized", 401));
+
   try {
     const { personName, phoneNumber, direction, originalAmount, reason, dueDate, note, currency } =
       req.body;
@@ -121,6 +134,7 @@ export const createReceivable = async (req: Request, res: Response, next: NextFu
 
     const receivable = await prisma.receivable.create({
       data: {
+        userId,
         personName,
         phoneNumber,
         direction,
@@ -142,13 +156,21 @@ export const createReceivable = async (req: Request, res: Response, next: NextFu
 
 
 export const updateReceivable = async (req: Request, res: Response, next: NextFunction) => {
+  const userId = req.user?.id;
+  if (!userId) return next(createError("Unauthorized", 401));
+
   try {
     const { personName, phoneNumber, reason, dueDate, note, status } = req.body;
 
-    // Only allow writing off manually; paid amounts are managed via payments
     if (status && !Object.values(ReceivableStatus).includes(status)) {
       return next(createError("Invalid status"));
     }
+
+    const existing = await prisma.receivable.findFirst({
+      where: { id: req.params.id, userId },
+      select: { id: true },
+    });
+    if (!existing) return next(createError("Receivable not found", 404));
 
     const receivable = await prisma.receivable.update({
       where: { id: req.params.id },
@@ -170,8 +192,16 @@ export const updateReceivable = async (req: Request, res: Response, next: NextFu
 
 
 export const deleteReceivable = async (req: Request, res: Response, next: NextFunction) => {
+  const userId = req.user?.id;
+  if (!userId) return next(createError("Unauthorized", 401));
+
   try {
-    // Delete payments and cash flows first
+    const existing = await prisma.receivable.findFirst({
+      where: { id: req.params.id, userId },
+      select: { id: true },
+    });
+    if (!existing) return next(createError("Receivable not found", 404));
+
     const payments = await prisma.receivablePayment.findMany({
       where: { receivableId: req.params.id },
       include: { cashFlow: true },
@@ -195,14 +225,17 @@ export const deleteReceivable = async (req: Request, res: Response, next: NextFu
 
 
 export const recordPayment = async (req: Request, res: Response, next: NextFunction) => {
+  const userId = req.user?.id;
+  if (!userId) return next(createError("Unauthorized", 401));
+
   try {
     const { amount, walletId, note, paidAt } = req.body;
 
     if (!amount) return next(createError("amount is required"));
     if (Number(amount) <= 0) return next(createError("amount must be positive"));
 
-    const receivable = await prisma.receivable.findUnique({
-      where: { id: req.params.id },
+    const receivable = await prisma.receivable.findFirst({
+      where: { id: req.params.id, userId },
     });
     if (!receivable) return next(createError("Receivable not found", 404));
     if (receivable.status === ReceivableStatus.SETTLED) {
@@ -219,13 +252,12 @@ export const recordPayment = async (req: Request, res: Response, next: NextFunct
       );
     }
 
-    // If a wallet is involved, validate it
+    // If a wallet is involved, validate it belongs to this user
     let wallet = null;
     if (walletId) {
-      wallet = await prisma.wallet.findUnique({ where: { id: walletId } });
+      wallet = await prisma.wallet.findFirst({ where: { id: walletId, userId } });
       if (!wallet) return next(createError("Wallet not found", 404));
 
-      // If I_OWE_THEM and I'm paying out → check I have enough
       if (
         receivable.direction === ReceivableDirection.I_OWE_THEM &&
         Number(wallet.balance) < Number(amount)
@@ -251,7 +283,6 @@ export const recordPayment = async (req: Request, res: Response, next: NextFunct
         },
       });
 
-      // Update receivable totals & status
       await tx.receivable.update({
         where: { id: receivable.id },
         data: {
@@ -261,10 +292,7 @@ export const recordPayment = async (req: Request, res: Response, next: NextFunct
         },
       });
 
-      // Update wallet balance and create cash flow if wallet involved
       if (walletId && wallet) {
-        // THEY_OWE_ME paying me → money INFLOW into my wallet
-        // I_OWE_THEM paying them → money OUTFLOW from my wallet
         const flowType =
           receivable.direction === ReceivableDirection.THEY_OWE_ME
             ? FlowType.INFLOW
@@ -290,6 +318,7 @@ export const recordPayment = async (req: Request, res: Response, next: NextFunct
                 ? `${receivable.personName} repaid debt`
                 : `Paid debt to ${receivable.personName}`,
             walletId,
+            userId,
             receivablePaymentId: payment.id,
             occurredAt: paidAt ? new Date(paidAt) : undefined,
           },
@@ -307,7 +336,16 @@ export const recordPayment = async (req: Request, res: Response, next: NextFunct
 
 
 export const getPayments = async (req: Request, res: Response, next: NextFunction) => {
+  const userId = req.user?.id;
+  if (!userId) return next(createError("Unauthorized", 401));
+
   try {
+    const receivable = await prisma.receivable.findFirst({
+      where: { id: req.params.id, userId },
+      select: { id: true },
+    });
+    if (!receivable) return next(createError("Receivable not found", 404));
+
     const payments = await prisma.receivablePayment.findMany({
       where: { receivableId: req.params.id },
       include: {
